@@ -41,6 +41,12 @@
             <version>${slf4j.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>io.projectreactor.tools</groupId>
+            <artifactId>blockhound</artifactId>
+            <version>1.0.4.RELEASE</version>
+        </dependency>
+
         <!--TEST-->
         <dependency>
             <groupId>io.projectreactor</groupId>
@@ -54,5 +60,6 @@
             <version>5.7.0-M1</version>
             <scope>test</scope>
         </dependency>
+
     </dependencies>
 </project>

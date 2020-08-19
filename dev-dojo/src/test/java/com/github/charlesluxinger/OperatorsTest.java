@@ -1,8 +1,14 @@
 package com.github.charlesluxinger;
 
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import reactor.blockhound.BlockHound;
+import reactor.blockhound.BlockingOperationError;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -11,12 +17,33 @@ import reactor.test.StepVerifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.List;
-import java.util.Set;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 public class OperatorsTest {
+
+	@BeforeAll
+	public static void setUp() {
+		BlockHound.install(builder -> builder.allowBlockingCallsInside("org.sl4f.impl.SimpleLogger", "write"));
+	}
+
+	@Test
+	public void blockHoundWorks() {
+		try {
+			FutureTask<?> task = new FutureTask<>(() -> {
+				Thread.sleep(0);
+				return "";
+			});
+			Schedulers.parallel().schedule(task);
+
+			task.get(10, TimeUnit.SECONDS);
+			Assertions.fail("should fail");
+		} catch (Exception e) {
+			Assertions.assertTrue(e.getCause() instanceof BlockingOperationError);
+		}
+	}
 
 	@Test
 	public void subscribedOnSimple() {
@@ -333,7 +360,86 @@ public class OperatorsTest {
 				.verify();
 	}
 
+
+	@Test
+	public void flatMapOperator() {
+		var flux = Flux.just("a", "b");
+
+		var flatFlux = flux
+				.map(String::toUpperCase)
+				.flatMap(this::findByName)
+				.log();
+
+		StepVerifier
+				.create(flatFlux)
+				.expectSubscription()
+				.expectNext( "nameB1", "nameB2", "nameA1", "nameA2")
+				.verifyComplete();
+	}
+
+	@Test
+	public void flatMapSequentialOperator() {
+		var flux = Flux.just("a", "b");
+
+		var flatFlux = flux
+				.map(String::toUpperCase)
+				.flatMapSequential(this::findByName)
+				.log();
+
+		StepVerifier
+				.create(flatFlux)
+				.expectSubscription()
+				.expectNext("nameA1", "nameA2", "nameB1", "nameB2")
+				.verifyComplete();
+	}
+
+	@Test
+	public void zipOperator() {
+		var title = Flux.just("Grand Blue", "Baki");
+		var studio = Flux.just("Zero-G", "TMS");
+		var episode = Flux.just(12, 24);
+
+
+		var animeFlux = Flux
+				.zip(title, studio, episode)
+				.flatMap(t -> Flux.just(new Anime(t.getT1(), t.getT2(), t.getT3())));
+
+		StepVerifier
+				.create(animeFlux)
+				.expectSubscription()
+				.expectNext(new Anime("Grand Blue", "Zero-G", 12), new Anime("Baki", "TMS", 24))
+				.verifyComplete();
+	}
+
+	@Test
+	public void zipWithOperator() {
+		var title = Flux.just("Grand Blue", "Baki");
+		var episode = Flux.just(12, 24);
+
+		var animeFlux = title.zipWith(episode)
+				.flatMap(t -> Flux.just(new Anime(t.getT1(), null, t.getT2())));
+
+		StepVerifier
+				.create(animeFlux)
+				.expectSubscription()
+				.expectNext(new Anime("Grand Blue", null, 12), new Anime("Baki", null, 24))
+				.verifyComplete();
+	}
+
+	private Flux<String> findByName(String name){
+		return name.equals("A") ? Flux.just("nameA1", "nameA2").delayElements(Duration.ofMillis(100)) : Flux.just("nameB1", "nameB2");
+	}
+
 	private Flux<Object> emptyFlux() {
 		return Flux.empty();
+	}
+
+	@Getter
+	@AllArgsConstructor
+	@EqualsAndHashCode
+	class Anime {
+		private String title;
+		private String studio;
+		private int episodes;
 	}
 }

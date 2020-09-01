@@ -59,7 +59,7 @@ class FluxAndMonoControllerTest {
     }
 
     @Test
-    void returnFluxStreamWithAssertions() {
+    void returnFluxWithAssertions() {
         var expectedList = List.of(1, 2, 3, 4);
 
         var resultList = webTestClient
@@ -77,7 +77,7 @@ class FluxAndMonoControllerTest {
     }
 
     @Test
-    void returnFluxStreamWithConsumeWith() {
+    void returnFluxWithConsumeWith() {
         var expectedList = List.of(1, 2, 3, 4);
 
         var resultList = webTestClient
@@ -91,5 +91,38 @@ class FluxAndMonoControllerTest {
                 .consumeWith(response ->  assertEquals(expectedList, response.getResponseBody()));
 
 
+    }
+
+    @Test
+    void returnFluxStream() {
+        var longFlux = webTestClient
+                .get()
+                .uri("/flux")
+                .accept(MediaType.APPLICATION_STREAM_JSON)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .returnResult(Long.class)
+                .getResponseBody();
+
+        StepVerifier
+                .create(longFlux)
+                .expectNext(0L, 1L,2L,3L)
+                .thenCancel()
+                .verify();
+    }
+
+    @Test
+    void returnMono() {
+        var expected = 1;
+        webTestClient
+                .get()
+                .uri("/mono")
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Integer.class)
+                .consumeWith(response -> assertEquals(expected, response.getResponseBody()));
     }
 }

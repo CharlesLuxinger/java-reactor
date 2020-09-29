@@ -1,0 +1,13 @@
+version: '3.7'
+
+services:
+  mongo.dev:
+    container_name: mongo.dev
+    image: mongo:4.4.1
+    ports:
+      - "27017:27017"
+    volumes:
+      - db:/data/db
+
+volumes:
+  db:

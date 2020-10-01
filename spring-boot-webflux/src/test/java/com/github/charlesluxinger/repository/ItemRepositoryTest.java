@@ -6,8 +6,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.data.mongo.DataMongoTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit4.SpringRunner;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.util.Arrays;
@@ -15,10 +17,11 @@ import java.util.List;
 
 @DataMongoTest
 @RunWith(SpringRunner.class)
+@DirtiesContext
 public class ItemRepositoryTest {
 
     @Autowired
-    private ItemRepository itemReactiveRepository;
+    private ItemRepository itemRepository;
 
     private final List<Item> itemList = Arrays.asList(new Item(null,"Samsung TV",400.0),
             new Item(null,"LG TV",420.0),
@@ -27,10 +30,10 @@ public class ItemRepositoryTest {
 
     @Before
     public void setUp(){
-        itemReactiveRepository
+        itemRepository
                 .deleteAll()
                 .thenMany(Flux.fromIterable(itemList))
-                .flatMap(itemReactiveRepository::save)
+                .flatMap(itemRepository::save)
                 .doOnNext((item -> System.out.println("Inserted Item is :" + item)))
                 .blockLast();
     }
@@ -38,7 +41,7 @@ public class ItemRepositoryTest {
     @Test
     public void getAllItems(){
         StepVerifier
-            .create(itemReactiveRepository.findAll())
+            .create(itemRepository.findAll())
             .expectSubscription()
             .expectNextCount(4)
             .verifyComplete();
@@ -47,7 +50,7 @@ public class ItemRepositoryTest {
     @Test
     public void getItemByID(){
         StepVerifier
-            .create(itemReactiveRepository.findById("ABC"))
+            .create(itemRepository.findById("ABC"))
             .expectSubscription()
             .expectNextMatches(item -> item.getDescription().equals("Bose Headphones"))
             .verifyComplete();
@@ -56,9 +59,38 @@ public class ItemRepositoryTest {
     @Test
     public void findItemByDescrition() {
         StepVerifier
-                .create(itemReactiveRepository.findByDescription("Bose Headphones"))
-                .expectSubscription()
-                .expectNextCount(1)
-                .verifyComplete();
+            .create(itemRepository.findByDescription("Bose Headphones"))
+            .expectSubscription()
+            .expectNextCount(1)
+            .verifyComplete();
     }
+
+    @Test
+    public void saveItem(){
+        Mono<Item> savedItem = itemRepository.save(new Item(null,"Google Home Mini",30.00));
+
+        StepVerifier
+            .create(savedItem)
+            .expectSubscription()
+            .expectNextMatches(i -> (i.getId() != null && i.getDescription().equals("Google Home Mini")))
+            .verifyComplete();
+    }
+
+    @Test
+    public void updateItem(){
+        Flux<Item> updatedItem = itemRepository
+                .findByDescription("LG TV")
+                .map(item -> {
+                    item.setPrice(520.00);
+                    return item;
+                })
+                .flatMap(itemRepository::save);
+
+        StepVerifier
+            .create(updatedItem)
+            .expectSubscription()
+            .expectNextMatches(item -> item.getPrice() == 520.00)
+            .verifyComplete();
+    }
+
 }
